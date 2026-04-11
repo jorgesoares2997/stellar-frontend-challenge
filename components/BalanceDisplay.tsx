@@ -1,41 +1,29 @@
-/**
- * BalanceDisplay Component
- * 
- * Displays user's XLM balance with refresh functionality
- * 
- * Features:
- * - Show XLM balance with nice formatting
- * - Refresh balance button
- * - Loading skeleton/spinner
- * - Multiple asset support (bonus feature ready)
- */
-
 'use client';
 
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { RefreshCw, TrendingUp } from 'lucide-react';
 import { stellar } from '@/lib/stellar-helper';
-import { FaSync, FaCoins } from 'react-icons/fa';
-import { Card } from './example-components';
 
 interface BalanceDisplayProps {
   publicKey: string;
 }
 
 export default function BalanceDisplay({ publicKey }: BalanceDisplayProps) {
-  const [balance, setBalance] = useState<string>('0');
+  const [balance, setBalance] = useState('0');
   const [assets, setAssets] = useState<Array<{ code: string; issuer: string; balance: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchBalance = async () => {
+    if (!publicKey) return;
     try {
       setRefreshing(true);
-      const balanceData = await stellar.getBalance(publicKey);
-      setBalance(balanceData.xlm);
-      setAssets(balanceData.assets);
-    } catch (error) {
-      console.error('Error fetching balance:', error);
-      alert('Failed to fetch balance. Please try again.');
+      const data = await stellar.getBalance(publicKey);
+      setBalance(data.xlm);
+      setAssets(data.assets);
+    } catch (e) {
+      console.error('Balance fetch error:', e);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -45,91 +33,81 @@ export default function BalanceDisplay({ publicKey }: BalanceDisplayProps) {
   useEffect(() => {
     if (publicKey) {
       fetchBalance();
+      // Add a periodic refresh like the original component had
+      const interval = setInterval(fetchBalance, 30000);
+      return () => clearInterval(interval);
     }
   }, [publicKey]);
 
-  const formatBalance = (balance: string): string => {
-    const num = parseFloat(balance);
-    return num.toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 7,
-    });
-  };
-
-  if (loading) {
+  if (loading && publicKey) {
     return (
-      <Card>
-        <div className="animate-pulse">
-          <div className="h-16 bg-primary/20 rounded-lg mb-4"></div>
-          <div className="h-10 bg-primary/10 rounded-lg w-1/2"></div>
-        </div>
-      </Card>
+      <div className="card-dark h-full animate-pulse bg-muted/20 border-dashed">
+        <div className="h-4 bg-muted/40 rounded w-20 mb-8" />
+        <div className="h-16 bg-muted/40 rounded w-40 mb-3" />
+        <div className="h-4 bg-muted/40 rounded w-24" />
+      </div>
     );
   }
 
+  if (!publicKey) return null;
+
+  const numericBalance = parseFloat(balance.replace(/,/g, '')) || 0;
+
   return (
-    <Card>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-primary font-mono tracking-widest text-glow uppercase flex items-center gap-2">
-          <FaCoins className="text-primary glow-primary mr-2" />
-          Active Balance
-        </h2>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.1, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+      className="card-dark h-full relative overflow-hidden"
+    >
+      {/* Background Decor */}
+      <div className="absolute -top-20 -right-20 w-40 h-40 rounded-full opacity-[0.06] blur-[60px] pointer-events-none"
+        style={{ background: 'hsl(175 85% 55%)' }}
+      />
+
+      <div className="flex items-center justify-between mb-8">
+        <span className="label-editorial mb-0 text-muted-foreground/60">Asset Reserve</span>
         <button
           onClick={fetchBalance}
           disabled={refreshing}
-          className="text-primary hover:text-primary/70 disabled:opacity-50 transition-colors"
-          title="Refresh balance"
+          className="text-muted-foreground hover:text-primary transition-colors focus:outline-none"
         >
-          <FaSync className={`text-xl ${refreshing ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
-      {/* XLM Balance */}
-      <div className="glass-panel border-primary/30 glow-primary rounded-[1.5rem] p-8 mb-4">
-        <p className="text-primary/60 text-xs font-mono tracking-widest uppercase mb-4">Current Mainnet Equivalent</p>
+      <div className="relative z-10">
         <div className="flex items-baseline gap-2">
-          <p className="text-6xl font-bold text-primary text-glow font-mono tracking-tighter" suppressHydrationWarning>
-            {formatBalance(balance)}
-          </p>
-          <p className="text-2xl text-primary/80 font-mono tracking-widest">XLM</p>
+          <span className="font-display text-5xl md:text-6xl text-foreground italic tracking-tight">
+            {balance}
+          </span>
+          <span className="font-mono text-sm text-muted-foreground">XLM</span>
         </div>
-        
-        {/* USD Estimate (placeholder for bonus feature) */}
-        <p className="text-primary/40 text-[10px] font-mono tracking-widest mt-4" suppressHydrationWarning>
-          ≈ ${(parseFloat(balance) * 0.12).toFixed(2)} USD (SIMULATED)
-        </p>
+
+        <div className="flex items-center gap-2 mt-3">
+          <TrendingUp className="w-3.5 h-3.5 text-primary/60" />
+          <span className="font-mono text-xs text-primary/60">
+            Node Status: Operational
+          </span>
+        </div>
       </div>
 
-      {/* Other Assets */}
       {assets.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-white/60 text-sm mb-3">Other Assets</p>
-          {assets.map((asset, index) => (
-            <div
-              key={index}
-              className="bg-white/5 border border-white/10 rounded-lg p-4 flex justify-between items-center"
-            >
-              <div>
-                <p className="text-white font-semibold">{asset.code}</p>
-                <p className="text-white/40 text-xs font-mono truncate max-w-[200px]">
-                  {asset.issuer}
-                </p>
+        <div className="mt-8 pt-6 border-t border-border/50 space-y-3">
+          <span className="label-editorial">Sub-Ledder Assets</span>
+          {assets.map((asset, i) => (
+            <div key={i} className="flex items-center justify-between group">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[10px] text-muted-foreground w-6 h-6 rounded bg-muted/30 flex items-center justify-center uppercase group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                  {asset.code.slice(0, 2)}
+                </span>
+                <span className="font-body text-sm text-foreground/80">{asset.code}</span>
               </div>
-              <p className="text-white text-lg font-bold">
-                {formatBalance(asset.balance)}
-              </p>
+              <span className="font-mono text-sm text-foreground/70">{asset.balance}</span>
             </div>
           ))}
         </div>
       )}
-
-      {/* Info Box */}
-      <div className="mt-6 p-4 bg-black/40 border border-primary/20 backdrop-blur-md rounded-xl">
-        <p className="text-primary/70 text-xs font-mono leading-relaxed">
-          <span className="text-primary font-bold text-glow">💡 NETWORK PROTOCOL:</span> Keep at least 1 XLM in your identity module for ledger reserves.
-        </p>
-      </div>
-    </Card>
+    </motion.div>
   );
 }
-

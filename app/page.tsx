@@ -1,21 +1,11 @@
-/**
- * Stellar Payment Dashboard - Main Page
- * 
- * This is the main page that brings all components together.
- * All blockchain logic is in lib/stellar-helper.ts (DO NOT MODIFY)
- * 
- * Your job: Make this UI/UX amazing! 🎨
- */
-
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence, useScroll, useTransform, useInView } from 'framer-motion';
+import { ArrowDown } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
-// 🎓 MASTERCLASS: Handling non-SSR-friendly libraries
-// Because stellar-helper.ts initializes the Wallet Kit immediately 
-// (which needs the 'window' object), we must ensure these components 
-// only load on the client side.
+// Dynamic imports to prevent SSR issues with wallet-kit and heavy components
 const WalletConnection = dynamic(() => import('@/components/WalletConnection'), { ssr: false });
 const BalanceDisplay = dynamic(() => import('@/components/BalanceDisplay'), { ssr: false });
 const PaymentForm = dynamic(() => import('@/components/PaymentForm'), { ssr: false });
@@ -24,25 +14,38 @@ const BalanceChart = dynamic(() => import('@/components/BalanceChart'), { ssr: f
 const AddressBook = dynamic(() => import('@/components/AddressBook'), { ssr: false });
 
 import { stellar } from '@/lib/stellar-helper';
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster as Sonner } from "@/components/ui/sonner";
 
-/**
- * 🎓 MASTERCLASS: The Container Component
- * 
- * Why this? 
- * The BalanceChart needs TWO things: the Current Balance and the Transaction History.
- * We fetch both here and pass them down. This keeps our Chart component 
- * focused ONLY on rendering the data.
- */
-function TransactionHistoryContainer({ publicKey }: { publicKey: string }) {
-  const [data, setData] = useState<{ balance: string, txs: any[] } | null>(null);
+function RevealText({ children, className = '', delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true, margin: "-100px" });
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 60 }}
+      animate={isInView ? { opacity: 1, y: 0 } : {}}
+      transition={{ duration: 0.9, delay, ease: [0.16, 1, 0.3, 1] }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+function AnalyticsContainer({ publicKey, refreshKey }: { publicKey: string; refreshKey: number }) {
+  const [data, setData] = useState<{ balance: string; txs: any[] } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
+      if (!publicKey) return;
       try {
+        setLoading(true);
         const [balanceData, txs] = await Promise.all([
           stellar.getBalance(publicKey),
-          stellar.getRecentTransactions(publicKey, 20)
+          stellar.getRecentTransactions(publicKey, 20),
         ]);
         setData({ balance: balanceData.xlm, txs });
       } catch (e) {
@@ -52,32 +55,58 @@ function TransactionHistoryContainer({ publicKey }: { publicKey: string }) {
       }
     }
     fetchData();
-  }, [publicKey]);
+  }, [publicKey, refreshKey]);
 
-  if (loading) return (
-    <div className="h-64 bg-white/5 animate-pulse rounded-2xl border border-white/10" />
-  );
-  
+  if (loading) return <div className="card-dark min-h-[320px] animate-pulse bg-muted/10 border-dashed" />;
   if (!data) return null;
 
+  return <BalanceChart currentBalance={data.balance} transactions={data.txs} publicKey={publicKey} />;
+}
+
+function Marquee() {
   return (
-    <BalanceChart 
-      currentBalance={data.balance} 
-      transactions={data.txs} 
-      publicKey={publicKey} 
-    />
+    <div className="overflow-hidden border-y border-border py-6 my-24 bg-muted/5">
+      <motion.div
+        animate={{ x: [0, -1920] }}
+        transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
+        className="flex gap-20 whitespace-nowrap"
+      >
+        {Array.from({ length: 12 }).map((_, i) => (
+          <span key={i} className="font-mono text-[10px] text-muted-foreground/60 tracking-[0.4em] uppercase">
+            Stellar Network · Protocol 20 · Smart Contracts · Decentralized · Instant Settlement · Global Assets
+          </span>
+        ))}
+      </motion.div>
+    </div>
   );
 }
 
 export default function Home() {
-  const [publicKey, setPublicKey] = useState<string>('');
+  const [publicKey, setPublicKey] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  
-  // Note: For a production app, we would fetch balance and transactions here
-  // and pass them down as props to avoid redundant network calls.
-  // For now, we'll keep the components independent as originally designed
-  // but let them share the refreshKey trigger.
+  const [currentTime, setCurrentTime] = useState('');
+  const heroRef = useRef<HTMLDivElement>(null);
+
+  const { scrollYProgress } = useScroll({
+    target: heroRef,
+    offset: ["start start", "end start"]
+  });
+
+  const heroOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
+  const heroScale = useTransform(scrollYProgress, [0, 0.8], [1, 0.95]);
+  const heroY = useTransform(scrollYProgress, [0, 1], [0, 100]);
+
+  useEffect(() => {
+    const update = () => {
+      setCurrentTime(new Date().toLocaleTimeString('en-US', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+      }));
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleConnect = (key: string) => {
     setPublicKey(key);
@@ -89,149 +118,233 @@ export default function Home() {
     setIsConnected(false);
   };
 
-  const handlePaymentSuccess = () => {
-    // Refresh balance and transaction history
-    setRefreshKey(prev => prev + 1);
-  };
+  const handlePaymentSuccess = () => setRefreshKey((k) => k + 1);
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
-      {/* Header */}
+    <TooltipProvider>
+      <Sonner />
+      <div className="min-h-screen bg-background selection:bg-primary/10 selection:text-primary">
+        {/* Editorial fixed header */}
+        <header className="fixed top-0 left-0 right-0 z-50 mix-blend-difference">
+          <div className="flex items-center justify-between px-8 md:px-16 py-8">
+            <span className="font-mono text-[10px] text-white tracking-[0.3em] uppercase font-bold">
+              Terminal.System
+            </span>
+            <span className="font-mono text-[10px] text-white/40 tracking-widest uppercase tabular-nums" suppressHydrationWarning>
+              {currentTime} UTC
+            </span>
+            <span className="font-mono text-[10px] text-white tracking-[0.3em] uppercase">
+              Stellar // Testnet
+            </span>
+          </div>
+        </header>
 
-      <header className="border-b border-primary/20 backdrop-blur-md bg-black/60 relative z-20">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-black/40 border border-primary/50 glow-primary rounded-xl flex items-center justify-center text-primary font-bold font-mono">
-                [S]
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-primary font-mono tracking-widest text-glow uppercase">Cyberstellar</h1>
-                <p className="text-primary/60 text-xs font-mono tracking-widest uppercase">Command Network</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-4">
-              <a
-                href="https://stellar.org"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-white/60 hover:text-white text-sm transition-colors"
+        <AnimatePresence mode="wait">
+          {!isConnected ? (
+            <motion.div
+              key="landing"
+              exit={{ opacity: 0, transition: { duration: 0.6 } }}
+            >
+              {/* HERO SECTION */}
+              <motion.section
+                ref={heroRef}
+                style={{ opacity: heroOpacity, scale: heroScale, y: heroY }}
+                className="relative h-screen flex flex-col justify-end pb-20 md:pb-32 px-8 md:px-16"
               >
-                About Stellar
-              </a>
-              <a
-                href="https://github.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-white/60 hover:text-white text-sm transition-colors"
-              >
-                GitHub
-              </a>
-            </div>
-          </div>
-        </div>
-      </header>
+                {/* Asymmetric background grid */}
+                <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{
+                  backgroundImage: 'linear-gradient(hsl(var(--foreground)/0.2) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)/0.2) 1px, transparent 1px)',
+                  backgroundSize: '80px 80px'
+                }} />
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        {/* Welcome Banner */}
-        {!isConnected && (
-          <div className="mb-10 glass-panel border-primary/30 glow-primary p-10 text-center relative max-w-4xl mx-auto rounded-[2rem] overflow-hidden group">
-            <div className="absolute inset-0 bg-gradient-to-b from-primary/10 to-transparent pointer-events-none" />
-            <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary/20 rounded-full blur-[100px] pointer-events-none" />
-            <h2 className="text-4xl font-black text-primary font-mono tracking-widest uppercase mb-4 text-glow relative z-10">
-              System Offline
-            </h2>
-            <p className="text-primary/70 max-w-2xl mx-auto font-mono text-sm leading-relaxed relative z-10">
-              Uplink required. Authenticate your identity module to access the global ledger, transmit secure payloads, and monitor quantum state changes across the network.
-            </p>
-          </div>
-        )}
+                {/* Ambient accent orb */}
+                <div className="absolute top-1/4 right-[10%] w-[400px] h-[400px] md:w-[600px] md:h-[600px] rounded-full opacity-[0.05] blur-[120px] pointer-events-none"
+                  style={{ background: 'radial-gradient(circle, hsl(var(--primary)), transparent)' }}
+                />
 
-        {/* Wallet Connection */}
-        <div className="mb-8">
-          <WalletConnection onConnect={handleConnect} onDisconnect={handleDisconnect} />
-        </div>
+                <div className="relative z-10 max-w-7xl">
+                  <motion.div
+                    initial={{ opacity: 0, y: 100 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 1.4, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    <h1 className="font-display text-[clamp(3.5rem,14vw,11rem)] leading-[0.8] text-foreground tracking-tighter italic">
+                      Lighthouse
+                      <br />
+                      <span className="text-gradient-accent">Stellar</span>
+                      <br />
+                      Terminal
+                    </h1>
+                  </motion.div>
 
-        {/* Dashboard Content - Only show when connected */}
-        {isConnected && publicKey && (
-          <div className="space-y-8">
-            {/* Balance & Analytics Section */}
-            <div className="grid lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-1" key={`balance-${refreshKey}`}>
-                <BalanceDisplay publicKey={publicKey} />
-              </div>
-              <div className="lg:col-span-2" key={`chart-${refreshKey}`}>
-                {/* 
-                  🎓 MASTERCLASS: Component Composition 
-                  BalanceChart is a sub-component of our dashboard. 
-                  Note: In a larger app, we would use a State Management 
-                  library like Zustant or Redux to avoid 'Prop Drilling'.
-                */}
-                <TransactionHistoryContainer publicKey={publicKey} />
-              </div>
-            </div>
-
-            {/* Actions & History Section */}
-            <div className="grid lg:grid-cols-2 gap-8">
-              {/* Payment Form */}
-              <div>
-                <PaymentForm publicKey={publicKey} onSuccess={handlePaymentSuccess} />
-              </div>
-
-              {/* Address Book Persistence */}
-              <div>
-                <AddressBook />
-              </div>
-            </div>
-
-            {/* Transaction History - Full Width for better readability */}
-            <div key={`history-${refreshKey}`}>
-              <TransactionHistory publicKey={publicKey} />
-            </div>
-          </div>
-        )}
-
-        {/* Getting Started Guide - Only show when not connected */}
-        {!isConnected && (
-          <div className="mt-8 grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              { id: '01', title: 'Install Uplink', desc: 'Acquire Freighter, xBull, or compatible identity modules.', icon: '🔌' },
-              { id: '02', title: 'Authenticate', desc: 'Initialize connection and bypass security protocols.', icon: '🔐' },
-              { id: '03', title: 'Extract Funds', desc: 'Secure testnet credits via the Friendbot automated system.', icon: '💎' },
-              { id: '04', title: 'Commence Tx', desc: 'Broadcast payloads across the decentralized state machine.', icon: '🚀' }
-            ].map((step) => (
-              <div key={step.id} className="glass-panel group hover:border-primary transition-all duration-500 p-6 rounded-2xl relative overflow-hidden">
-                <div className="absolute -right-4 -bottom-4 text-primary/5 font-black text-8xl pointer-events-none font-mono">
-                  {step.id}
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 1, delay: 1.2 }}
+                    className="flex flex-col md:flex-row items-start md:items-end justify-between mt-12 md:mt-20 gap-8"
+                  >
+                    <p className="font-body text-sm md:text-base text-muted-foreground max-w-md leading-relaxed">
+                      A high-precision interface for managing digital assets, authorizing global payments, and auditing the Stellar ledger.
+                    </p>
+                    <motion.div
+                      animate={{ y: [0, 10, 0] }}
+                      transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+                      className="hidden md:block"
+                    >
+                      <ArrowDown className="w-6 h-6 text-muted-foreground/30" />
+                    </motion.div>
+                  </motion.div>
                 </div>
-                <div className="w-12 h-12 bg-black/50 border border-primary/30 rounded-lg flex items-center justify-center mb-4 text-2xl group-hover:glow-primary transition-all">
-                  {step.icon}
-                </div>
-                <h3 className="text-primary font-bold mb-2 font-mono tracking-wider">{step.title}</h3>
-                <p className="text-primary/50 text-sm font-mono leading-relaxed relative z-10">
-                  {step.desc}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-      </main>
 
-      {/* Footer */}
-      <footer className="border-t border-primary/20 mt-16 bg-black/40 backdrop-blur-md relative z-20">
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          <div className="text-center text-primary/40 text-sm font-mono tracking-widest">
-            <p className="mb-2 uppercase">
-              Constructed via Stellar SDK // Testnet Environment Active
-            </p>
-            <p className="text-xs text-secondary glow-secondary inline-block">
-              [ SECURE CONNECTION FAILED - SIMULATION ONLY ]
-            </p>
-          </div>
-        </div>
-      </footer>
-    </div>
+                <motion.div
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: 1 }}
+                  transition={{ duration: 1.8, delay: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                  className="absolute bottom-0 left-0 right-0 h-px bg-border origin-left"
+                />
+              </motion.section>
+
+              {/* PHILOSOPHY SECTION */}
+              <section className="px-8 md:px-16 py-32 md:py-56 bg-muted/5">
+                <div className="max-w-7xl mx-auto">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-12 md:gap-24">
+                    <div className="md:col-span-4">
+                      <RevealText>
+                        <span className="font-mono text-[10px] text-primary tracking-[0.4em] uppercase font-bold">
+                          01 — Vision
+                        </span>
+                      </RevealText>
+                    </div>
+                    <div className="md:col-span-8">
+                      <RevealText delay={0.1}>
+                        <h2 className="font-display text-4xl md:text-6xl lg:text-7xl text-foreground italic leading-[1] text-balance">
+                          Decentralized architecture. 
+                          <br />
+                          Architectural precision.
+                        </h2>
+                      </RevealText>
+                      <RevealText delay={0.2}>
+                        <p className="font-body text-lg text-muted-foreground mt-12 max-w-2xl leading-relaxed">
+                          The "Lighthouse" interface is designed to strip away the noise of modern finance. 
+                          We provide a sterile, high-performance command module for individual and institutional asset management on the Stellar network.
+                        </p>
+                      </RevealText>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* FEATURES */}
+              <section className="px-8 md:px-16 py-32">
+                <div className="max-w-7xl mx-auto">
+                  <RevealText>
+                    <span className="font-mono text-[10px] text-primary tracking-[0.4em] uppercase font-bold block mb-20 text-center md:text-left">
+                      02 — Modules
+                    </span>
+                  </RevealText>
+
+                  <div className="space-y-1">
+                    {[
+                      { num: '01', title: 'Identity Uplink', desc: 'Secure connection via Freighter & xBull hardware modules with encrypted session tokens.' },
+                      { num: '02', title: 'Asset Monitoring', desc: 'Sub-ledger monitoring for XLM, USDC, and every verified anchor asset in real-time.' },
+                      { num: '03', title: 'Ledger Broadcast', desc: 'Low-latency payload transmission. Settle global payments in ≤ 5 seconds.' },
+                      { num: '04', title: 'Audit Registry', desc: 'Cryptographic history search. Direct deep-links to network node explorers.' },
+                    ].map((item, i) => (
+                      <RevealText key={item.num} delay={i * 0.1}>
+                        <div className="group flex items-start gap-8 md:gap-16 py-12 border-t border-border/50 cursor-default hover:bg-muted/30 transition-all duration-700 px-6 -mx-6">
+                          <span className="font-mono text-xs text-muted-foreground/40 mt-1 flex-shrink-0 group-hover:text-primary transition-colors">
+                            {item.num}
+                          </span>
+                          <div className="flex-1 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                            <h3 className="font-display text-3xl md:text-5xl text-foreground italic group-hover:translate-x-4 transition-transform duration-700 select-none">
+                              {item.title}
+                            </h3>
+                            <p className="font-body text-sm text-muted-foreground max-w-xs md:text-right leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity duration-700">
+                              {item.desc}
+                            </p>
+                          </div>
+                        </div>
+                      </RevealText>
+                    ))}
+                  </div>
+                </div>
+              </section>
+
+              <Marquee />
+
+              {/* CONNECT CTA */}
+              <section className="px-8 md:px-16 py-32 md:py-56 bg-gradient-to-b from-transparent to-muted/10">
+                <div className="max-w-4xl mx-auto">
+                  <RevealText className="text-center md:text-left">
+                    <span className="font-mono text-[10px] text-primary tracking-[0.4em] uppercase font-bold block mb-12">
+                      03 — Access
+                    </span>
+                  </RevealText>
+                  <WalletConnection onConnect={handleConnect} onDisconnect={handleDisconnect} />
+                </div>
+              </section>
+
+              <footer className="border-t border-border px-8 md:px-16 py-12">
+                <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-8 text-muted-foreground">
+                  <span className="font-mono text-[9px] tracking-[0.3em] uppercase opacity-50">
+                    Stellar / Testnet Env // Simulator mode active
+                  </span>
+                  <div className="flex gap-12">
+                    <a href="https://stellar.org" target="_blank" rel="noopener noreferrer" className="font-mono text-[9px] tracking-[0.3em] uppercase hover:text-primary transition-colors">
+                      Stellar.org
+                    </a>
+                    <a href="https://github.com/jorgesoares2997/stellar-frontend-challenge" target="_blank" rel="noopener noreferrer" className="font-mono text-[9px] tracking-[0.3em] uppercase hover:text-primary transition-colors">
+                      Source.Audit
+                    </a>
+                  </div>
+                </div>
+              </footer>
+            </motion.div>
+          ) : (
+            /* ==================== DASHBOARD ==================== */
+            <motion.div
+              key="dashboard"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.8 }}
+              className="pt-32 pb-24"
+            >
+              <div className="px-8 md:px-16 max-w-7xl mx-auto">
+                <div className="mb-16">
+                  <WalletConnection onConnect={handleConnect} onDisconnect={handleDisconnect} />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-8">
+                  <div className="lg:col-span-4">
+                    <BalanceDisplay publicKey={publicKey} key={`bal-${refreshKey}`} />
+                  </div>
+                  <div className="lg:col-span-8">
+                    <AnalyticsContainer publicKey={publicKey} refreshKey={refreshKey} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                  <PaymentForm publicKey={publicKey} onSuccess={handlePaymentSuccess} />
+                  <AddressBook />
+                </div>
+
+                <TransactionHistory publicKey={publicKey} key={`txs-${refreshKey}`} />
+              </div>
+
+              <footer className="border-t border-border mt-32 px-8 md:px-16 py-12 bg-muted/5">
+                <div className="max-w-7xl mx-auto flex items-center justify-between text-muted-foreground/40">
+                  <span className="font-mono text-[9px] tracking-[0.2em] uppercase">
+                    Security Policy: LocalStorage.Cache
+                  </span>
+                  <span className="font-mono text-[9px] tracking-[0.2em] uppercase">
+                    Stellar Testnet Node
+                  </span>
+                </div>
+              </footer>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </TooltipProvider>
   );
 }

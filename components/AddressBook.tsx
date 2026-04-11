@@ -1,145 +1,131 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Card } from './example-components';
-import { Contact, UserPlus, Trash2, ShieldCheck, Wallet } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { Plus, Trash2, ShieldCheck } from 'lucide-react';
 
-interface AddressContact {
-  address: string;
+interface Contact {
   name: string;
+  address: string;
   addedAt: number;
 }
 
-/**
- * 🎓 MASTERCLASS: Persistence with LocalStorage
- * 
- * In Web3, we often don't want to store personal data like "Grandma's Name" 
- * on the public blockchain. Instead, we use LocalStorage.
- * 
- * Key Concepts:
- * 1. JSON.stringify/parse: LocalStorage only stores strings.
- * 2. Dependency Array: We sync the UI state with the persistent storage.
- */
 export default function AddressBook() {
-  const [contacts, setContacts] = useState<AddressContact[]>([]);
-  const [newName, setNewName] = useState('');
-  const [newAddress, setNewAddress] = useState('');
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [name, setName] = useState('');
+  const [address, setAddress] = useState('');
+  const [showForm, setShowForm] = useState(false);
 
-  // 1. Initial Load from LocalStorage
   useEffect(() => {
     const saved = localStorage.getItem('stellar-address-book');
     if (saved) {
-      try {
-        setContacts(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to parse address book');
-      }
+      try { setContacts(JSON.parse(saved)); } catch {}
     }
   }, []);
 
-  // 2. Save to LocalStorage whenever contacts change
   useEffect(() => {
     localStorage.setItem('stellar-address-book', JSON.stringify(contacts));
   }, [contacts]);
 
   const addContact = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName || !newAddress) return;
-
-    // Check if address starts with 'G' (Stellar convention)
-    if (!newAddress.startsWith('G')) {
-      alert('Please enter a valid Stellar Public Key (starts with G)');
-      return;
-    }
-
-    const newContact: AddressContact = {
-      address: newAddress,
-      name: newName,
-      addedAt: Date.now()
-    };
-
-    setContacts([...contacts, newContact]);
-    setNewName('');
-    setNewAddress('');
+    if (!name || !address) return;
+    if (!address.startsWith('G') || address.length < 56) return;
+    setContacts([...contacts, { name, address, addedAt: Date.now() }]);
+    setName('');
+    setAddress('');
+    setShowForm(false);
   };
 
-  const removeContact = (address: string) => {
-    setContacts(contacts.filter(c => c.address !== address));
+  const removeContact = (addr: string) => {
+    setContacts(contacts.filter((c) => c.address !== addr));
   };
 
   return (
-    <Card>
-      <div className="flex flex-col space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary/10 text-primary">
-            <Contact size={20} />
-          </div>
-          <h2 className="text-xl font-bold">Address Book</h2>
-        </div>
-
-        {/* Add Contact Form */}
-        <form onSubmit={addContact} className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <input
-              type="text"
-              placeholder="Name (e.g. Satoshi)"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              className="bg-black/40 border border-primary/20 rounded-xl px-4 py-2 text-primary placeholder-primary/30 text-sm focus:border-primary focus:shadow-[0_0_15px_-3px_hsl(var(--primary)/0.5)] outline-none transition-all font-mono"
-            />
-            <input
-              type="text"
-              placeholder="Address (G...)"
-              value={newAddress}
-              onChange={(e) => setNewAddress(e.target.value)}
-              className="bg-black/40 border border-primary/20 rounded-xl px-4 py-2 text-primary placeholder-primary/30 text-sm focus:border-primary focus:shadow-[0_0_15px_-3px_hsl(var(--primary)/0.5)] outline-none transition-all font-mono"
-            />
-          </div>
-          <button
-            type="submit"
-            className="w-full py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/50 hover:border-primary glow-primary rounded-xl text-sm font-bold font-mono uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
-          >
-            <UserPlus size={16} /> Save Contact
-          </button>
-        </form>
-
-        {/* Contacts List */}
-        <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-          {contacts.length === 0 ? (
-            <div className="text-center py-6 text-muted-foreground opacity-50">
-              <p className="text-sm">No contacts saved yet.</p>
-            </div>
-          ) : (
-            contacts.map((contact) => (
-              <div 
-                key={contact.address}
-                className="flex items-center justify-between p-3 rounded-xl bg-black/40 backdrop-blur-md border border-primary/20 group hover:border-primary hover:glow-primary transition-all"
-              >
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
-                    <Wallet size={18} />
-                  </div>
-                  <div className="overflow-hidden">
-                    <p className="font-bold text-sm truncate">{contact.name}</p>
-                    <p className="text-[10px] text-muted-foreground font-mono truncate">{contact.address}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => removeContact(contact.address)}
-                  className="p-2 text-muted-foreground hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-
-        <div className="pt-4 border-t border-primary/20 flex items-center gap-2 text-[10px] text-primary/50 font-mono tracking-widest uppercase">
-          <ShieldCheck size={12} className="text-green-500" />
-          <span>Local storage only. Your contacts never leave your browser.</span>
-        </div>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.25, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+      className="card-dark"
+    >
+      <div className="flex items-center justify-between mb-8">
+        <h3 className="font-display text-2xl text-foreground italic">Node Directory</h3>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="btn-ghost text-[10px] inline-flex items-center gap-1.5 py-1.5 px-4 tracking-[0.2em] uppercase transition-all hover:bg-primary/10 hover:border-primary/50"
+        >
+          {showForm ? 'Cancel' : <><Plus className="w-3.5 h-3.5" /> New Link</>}
+        </button>
       </div>
-    </Card>
+
+      {showForm && (
+        <motion.form
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          onSubmit={addContact}
+          className="mb-8 space-y-4 bg-muted/20 border border-border rounded-lg p-5"
+        >
+          <div>
+            <label className="label-editorial text-muted-foreground/60">Node Alias</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Validator Prime"
+              className="input-dark font-body"
+            />
+          </div>
+          <div>
+            <label className="label-editorial text-muted-foreground/60">Public Token</label>
+            <input
+              type="text"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="GABCD…"
+              className="input-dark font-mono text-xs tracking-tight"
+            />
+          </div>
+          <button type="submit" className="btn-primary w-full text-xs py-3 tracking-widest uppercase shadow-glow">
+            Store Identity
+          </button>
+        </motion.form>
+      )}
+
+      {contacts.length === 0 ? (
+        <div className="text-center py-12 border border-dashed border-border/50 rounded-lg">
+          <p className="font-mono text-[10px] tracking-[0.3em] text-muted-foreground/40 uppercase">No cached identities</p>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {contacts.map((c) => (
+            <div
+              key={c.address}
+              className="flex items-center gap-4 py-4 border-b border-border/30 last:border-0 group transition-all"
+            >
+              <span className="w-8 h-8 rounded bg-muted/50 flex items-center justify-center text-primary font-display text-lg italic shadow-subtle group-hover:bg-primary/10 transition-colors">
+                {c.name[0]}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="font-body text-sm text-foreground/90 font-medium group-hover:text-primary transition-colors">{c.name}</p>
+                <p className="font-mono text-[10px] text-muted-foreground/40 truncate tracking-tighter">{c.address}</p>
+              </div>
+              <button
+                onClick={() => removeContact(c.address)}
+                className="text-muted-foreground/30 hover:text-destructive transition-colors opacity-0 group-hover:opacity-100 p-2"
+                title="Remove Link"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="pt-6 mt-6 border-t border-border/50 flex items-center gap-2 text-[9px] text-muted-foreground/40 font-mono tracking-widest uppercase">
+          <ShieldCheck size={12} className="text-primary/40" />
+          <span>Encrypted Local Cache Only</span>
+      </div>
+    </motion.div>
   );
 }

@@ -1,23 +1,9 @@
-/**
- * TransactionHistory Component
- * 
- * Displays recent transactions for the connected wallet
- * 
- * Features:
- * - List recent transactions
- * - Show: amount, from/to, date
- * - Link to Stellar Expert for details
- * - Empty state when no transactions
- * - Loading state
- * - Refresh functionality
- */
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { motion } from 'framer-motion';
+import { ArrowUpRight, ArrowDownLeft, ExternalLink, RefreshCw, Search } from 'lucide-react';
 import { stellar } from '@/lib/stellar-helper';
-import { FaHistory, FaSync, FaArrowUp, FaArrowDown, FaExternalLinkAlt } from 'react-icons/fa';
-import { Card, EmptyState } from './example-components';
 
 interface Transaction {
   id: string;
@@ -40,46 +26,33 @@ export default function TransactionHistory({ publicKey }: TransactionHistoryProp
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<'all' | '24h' | '7d' | '30d'>('all');
-  const [limit] = useState(50); // Fetch more to allow for better client-side filtering
 
-  /**
-   * 🎓 MASTERCLASS: Optimized Filtering
-   * useMemo recalculates the filtered list ONLY when 'transactions', 
-   * 'searchQuery', or 'dateFilter' change. This is critical for 
-   * a smooth, "no-lag" search experience.
-   */
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
-      // 1. Text Search Filter (Address or Transaction Hash)
-      const matchesSearch = 
+      const matchesSearch =
+        !searchQuery ||
         tx.from?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         tx.to?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         tx.hash.toLowerCase().includes(searchQuery.toLowerCase());
 
-      // 2. Date/Time Filter Logic
       if (dateFilter === 'all') return matchesSearch;
-
-      const txDate = new Date(tx.createdAt);
-      const now = new Date();
-      const diffMs = now.getTime() - txDate.getTime();
-      const diffDays = diffMs / (1000 * 60 * 60 * 24);
-
-      const withinTimeRange = 
+      const diffDays = (Date.now() - new Date(tx.createdAt).getTime()) / 86400000;
+      const withinRange =
         (dateFilter === '24h' && diffDays <= 1) ||
         (dateFilter === '7d' && diffDays <= 7) ||
         (dateFilter === '30d' && diffDays <= 30);
-
-      return matchesSearch && withinTimeRange;
+      return matchesSearch && withinRange;
     });
   }, [transactions, searchQuery, dateFilter]);
 
   const fetchTransactions = async () => {
+    if (!publicKey) return;
     try {
       setRefreshing(true);
-      const txs = await stellar.getRecentTransactions(publicKey, limit);
+      const txs = await stellar.getRecentTransactions(publicKey, 50);
       setTransactions(txs);
-    } catch (error) {
-      console.error('Error fetching transactions:', error);
+    } catch (e) {
+      console.error('Tx fetch error:', e);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -87,180 +60,154 @@ export default function TransactionHistory({ publicKey }: TransactionHistoryProp
   };
 
   useEffect(() => {
-    if (publicKey) {
-      fetchTransactions();
-    }
+    if (publicKey) fetchTransactions();
   }, [publicKey]);
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric',
-      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
-    });
+    const diffMs = Date.now() - date.getTime();
+    const mins = Math.floor(diffMs / 60000);
+    const hrs = Math.floor(diffMs / 3600000);
+    const days = Math.floor(diffMs / 86400000);
+    if (mins < 1) return 'Now';
+    if (mins < 60) return `${mins}m`;
+    if (hrs < 24) return `${hrs}h`;
+    if (days < 7) return `${days}d`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  const formatAddress = (address?: string): string => {
-    if (!address) return 'N/A';
-    return stellar.formatAddress(address, 4, 4);
-  };
+  const isOutgoing = (tx: Transaction) => tx.from === publicKey;
 
-  const isOutgoing = (tx: Transaction): boolean => {
-    return tx.from === publicKey;
-  };
-
-  if (loading) {
+  if (loading && publicKey) {
     return (
-      <Card>
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse">
-              <div className="h-20 bg-primary/10 border border-primary/20 rounded-lg"></div>
-            </div>
-          ))}
-        </div>
-      </Card>
+      <div className="card-dark space-y-3 border-dashed opacity-50">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="animate-pulse h-16 bg-muted/20 rounded-md" />
+        ))}
+      </div>
     );
   }
 
+  if (!publicKey) return null;
+
   return (
-    <Card>
-      <div className="flex flex-col space-y-4">
-        {/* Toolbar: Search and Filter */}
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="text-2xl font-bold text-primary font-mono tracking-widest uppercase text-glow flex items-center gap-2">
-            <FaHistory className="text-primary glow-primary mr-1" />
-            Activity Network
-          </h2>
-          <button
-            onClick={fetchTransactions}
-            disabled={refreshing}
-            className="text-primary hover:text-primary/70 disabled:opacity-50 transition-colors"
-          >
-            <FaSync className={`text-xl ${refreshing ? 'animate-spin' : ''}`} />
-          </button>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.3, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+      className="card-dark"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-3">
+           <h3 className="font-display text-2xl text-foreground italic leading-none">Ledger Registry</h3>
+           <div className="px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20">
+             <span className="font-mono text-[9px] text-primary uppercase font-bold tracking-tight">Real-time</span>
+           </div>
         </div>
-
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1 relative">
-            <input
-              type="text"
-              placeholder="Search by address or hash..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-black/40 border border-primary/20 rounded-xl px-4 py-2 text-primary placeholder-primary/30 font-mono text-sm focus:outline-none focus:border-primary focus:shadow-[0_0_15px_-3px_hsl(var(--primary)/0.5)] transition-all"
-            />
-          </div>
-          <select
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value as any)}
-            className="w-full sm:w-auto bg-black/40 border border-primary/20 rounded-xl px-4 py-2 text-primary focus:outline-none focus:border-primary focus:shadow-[0_0_15px_-3px_hsl(var(--primary)/0.5)] transition-all text-sm font-mono dropdown-neon"
-          >
-            <option value="all">All Time</option>
-            <option value="24h">Last 24h</option>
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-          </select>
-        </div>
-
-        {/* List: Filtered Transactions */}
-        {filteredTransactions.length === 0 ? (
-          <div className="py-20 text-center glass-panel rounded-2xl border-primary/20">
-            <p className="text-4xl mb-4 opacity-50">🔍</p>
-            <h3 className="text-primary font-mono tracking-widest uppercase font-bold mb-2">No results found</h3>
-            <p className="text-primary/50 text-sm font-mono mb-4">Try adjusting your search or filters</p>
-            <button 
-              onClick={() => { setSearchQuery(''); setDateFilter('all'); }}
-              className="text-primary hover:text-primary/80 text-sm font-bold font-mono border-b border-primary/50 pb-1"
-            >
-              Clear all filters
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {filteredTransactions.map((tx) => {
-              const outgoing = isOutgoing(tx);
-              
-              return (
-                <div
-                  key={tx.id}
-                  className="bg-black/40 backdrop-blur-md rounded-xl p-4 transition-all border border-primary/10 hover:border-primary/40 hover:shadow-[0_0_15px_-3px_hsl(var(--primary)/0.2)]"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        outgoing 
-                          ? 'bg-red-500/20 text-red-400' 
-                          : 'bg-green-500/20 text-green-400'
-                      }`}>
-                        {outgoing ? <FaArrowUp /> : <FaArrowDown />}
-                      </div>
-                      <div>
-                        <p className="text-primary font-mono uppercase tracking-wider font-bold mb-1">
-                          {outgoing ? 'Sent' : 'Received'}
-                        </p>
-                        {tx.amount && (
-                          <p className={`text-lg font-bold ${
-                            outgoing ? 'text-red-400' : 'text-green-400'
-                          }`}>
-                            {outgoing ? '-' : '+'}{parseFloat(tx.amount).toFixed(2)} {tx.asset || 'XLM'}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <a
-                      href={stellar.getExplorerLink(tx.hash, 'tx')}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:text-primary/70 text-sm flex items-center gap-1 transition-colors font-mono tracking-widest"
-                    >
-                      Details <FaExternalLinkAlt className="text-xs" />
-                    </a>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-primary/40 text-xs mb-1 uppercase font-mono tracking-wider">From</p>
-                      <p className="text-primary/80 font-mono text-xs truncate" title={tx.from}>{formatAddress(tx.from)}</p>
-                    </div>
-                    <div>
-                      <p className="text-primary/40 text-xs mb-1 uppercase font-mono tracking-wider">To</p>
-                      <p className="text-primary/80 font-mono text-xs truncate" title={tx.to}>{formatAddress(tx.to)}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center mt-3 pt-3 border-t border-primary/20">
-                    <p className="text-primary/50 text-[10px] font-mono tracking-widest" suppressHydrationWarning>{formatDate(tx.createdAt)}</p>
-                    <p className="text-primary/30 text-[10px] font-mono">{tx.hash.slice(0, 16)}...</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <button
+          onClick={fetchTransactions}
+          disabled={refreshing}
+          className="text-muted-foreground hover:text-primary transition-colors focus:outline-none"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
-      {filteredTransactions.length > 0 && (
-        <div className="mt-4 text-center border-t border-white/5 pt-4">
-          <p className="text-white/40 text-xs">
-            Showing {filteredTransactions.length} result{filteredTransactions.length !== 1 ? 's' : ''}
-          </p>
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-8">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50" />
+          <input
+            type="text"
+            placeholder="Search hash or node address…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="input-dark pl-9 font-mono text-[11px] tracking-tight placeholder:italic"
+          />
+        </div>
+        <div className="flex items-center gap-1.5 p-1 bg-muted/20 border border-border rounded-lg">
+          {(['all', '24h', '7d', '30d'] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setDateFilter(f)}
+              className={`px-3 py-1.5 rounded-md font-mono text-[9px] tracking-[0.15em] uppercase transition-all duration-300 ${
+                dateFilter === f
+                  ? 'bg-primary text-primary-foreground shadow-glow'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {f === 'all' ? 'All' : f}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* List */}
+      {filteredTransactions.length === 0 ? (
+        <div className="text-center py-24 border border-dashed border-border rounded-lg bg-muted/5">
+          <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground uppercase mb-4">Registry Empty</p>
+          <button
+            onClick={() => { setSearchQuery(''); setDateFilter('all'); }}
+            className="text-primary text-[10px] font-mono hover:underline uppercase tracking-widest"
+          >
+            Reset Query
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-px">
+          {filteredTransactions.map((tx, i) => {
+            const outgoing = isOutgoing(tx);
+            return (
+              <motion.div
+                key={tx.id}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: i * 0.02 }}
+                className="flex items-center gap-4 py-5 border-b border-border/40 last:border-0 group hover:bg-muted/30 transition-all -mx-6 px-6"
+              >
+                <div className={`w-9 h-9 rounded flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105 ${
+                  outgoing ? 'bg-destructive/5 text-destructive border border-destructive/20' : 'bg-primary/5 text-primary border border-primary/20'
+                }`}>
+                  {outgoing ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownLeft className="w-4 h-4" />}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className={outgoing ? 'tag-sent' : 'tag-received'}>
+                      {outgoing ? 'Transmitted' : 'Received'}
+                    </span>
+                    <span className="font-mono text-[9px] text-muted-foreground/60 tracking-tighter" suppressHydrationWarning>
+                       {formatDate(tx.createdAt)}
+                    </span>
+                  </div>
+                  <p className="font-mono text-[11px] text-foreground/40 mt-1 truncate max-w-[200px] md:max-w-none">
+                    {stellar.formatAddress(outgoing ? tx.to || '' : tx.from || '', 8, 8)}
+                  </p>
+                </div>
+
+                <div className="text-right flex-shrink-0">
+                  <p className={`font-mono text-sm font-bold tracking-tight ${outgoing ? 'text-destructive' : 'text-primary'}`}>
+                    {outgoing ? '−' : '+'}{tx.amount} <span className="text-[10px] font-normal opacity-70">XLM</span>
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <a
+                    href={stellar.getExplorerLink(tx.hash, 'tx')}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-all p-1"
+                    title="View Transaction"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       )}
-    </Card>
+    </motion.div>
   );
 }
-

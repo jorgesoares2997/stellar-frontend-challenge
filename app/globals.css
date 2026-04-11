@@ -2,108 +2,149 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
+
 @layer base {
   :root {
-    --background: 210 20% 98%;
-    --foreground: 224 71.4% 4.1%;
-    --card: 0 0% 100%;
-    --card-foreground: 224 71.4% 4.1%;
-    /* Bright Cyber Cyan */
-    --primary: 188 100% 50%;
-    --primary-foreground: 224 71.4% 4.1%;
-    /* Electric Violet */
-    --secondary: 271 91% 65%;
-    --secondary-foreground: 210 20% 98%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 188 100% 50%;
-    --accent-foreground: 224 71.4% 4.1%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 188 100% 50%;
-    --radius: 1rem;
-  }
+    /* Dark monochrome + electric accent */
+    --background: 0 0% 4%;
+    --foreground: 0 0% 93%;
 
-  .dark {
-    /* Deep Void Black */
-    --background: 232 47% 4%;
-    --foreground: 210 20% 98%;
-    /* Translucent Space Glass */
-    --card: 232 47% 6%;
-    --card-foreground: 210 20% 98%;
-    /* Neon Cyan */
-    --primary: 188 100% 50%;
-    --primary-foreground: 232 47% 4%;
-    /* Electric Violet */
-    --secondary: 271 91% 65%;
-    --secondary-foreground: 210 20% 98%;
-    --muted: 232 47% 10%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 271 91% 65%;
-    --accent-foreground: 210 20% 98%;
-    --border: 232 47% 15%;
-    --input: 232 47% 12%;
-    --ring: 188 100% 50%;
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 93%;
+
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 93%;
+
+    /* Electric cyan accent */
+    --primary: 175 85% 55%;
+    --primary-foreground: 0 0% 4%;
+
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 80%;
+
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 45%;
+
+    --accent: 175 85% 55%;
+    --accent-foreground: 0 0% 4%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 93%;
+
+    --success: 152 55% 50%;
+    --success-foreground: 0 0% 4%;
+
+    --border: 0 0% 14%;
+    --input: 0 0% 14%;
+    --ring: 175 85% 55%;
+
+    --radius: 0.5rem;
+
+    --font-display: 'Instrument Serif', Georgia, serif;
+    --font-body: 'Inter', system-ui, sans-serif;
+    --font-mono: 'Space Mono', monospace;
+    
+    --shadow-subtle: 0 1px 2px hsl(0 0% 0% / 0.5);
+    --shadow-elevated: 0 8px 32px hsl(0 0% 0% / 0.6);
+    --shadow-glow: 0 0 40px hsl(175 85% 55% / 0.1);
   }
 }
 
 @layer base {
   * {
-    @apply border-primary/20;
+    @apply border-border;
   }
-  
+
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply bg-background text-foreground;
-    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-body);
     -webkit-font-smoothing: antialiased;
-    /* Animated Cyber Grid using CSS gradients */
-    background-image: 
-      linear-gradient(to right, hsl(var(--border) / 0.2) 1px, transparent 1px),
-      linear-gradient(to bottom, hsl(var(--border) / 0.2) 1px, transparent 1px);
-    background-size: 50px 50px;
-    background-position: center center;
-    background-attachment: fixed;
-    animation: moveGrid 20s linear infinite;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+  }
+
+  ::selection {
+    background: hsl(175 85% 55% / 0.2);
+    color: hsl(0 0% 100%);
   }
 }
 
-@keyframes moveGrid {
-  0% { transform: translateY(0); }
-  100% { transform: translateY(50px); }
+@layer components {
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-body {
+    font-family: var(--font-body);
+  }
+
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+
+  .text-gradient-accent {
+    background: linear-gradient(135deg, hsl(175 85% 55%), hsl(195 90% 60%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .label-editorial {
+    @apply text-muted-foreground font-mono text-[10px] uppercase tracking-[0.2em] mb-2 block;
+  }
+
+  .input-dark {
+    @apply w-full bg-muted/50 border border-border rounded-md px-4 py-3 font-body text-foreground text-sm;
+    @apply placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/40;
+    @apply transition-all duration-200;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-primary-foreground rounded-md px-6 py-3 font-body font-medium text-sm tracking-wide;
+    @apply hover:brightness-110 transition-all duration-300;
+    @apply disabled:opacity-30 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent text-foreground rounded-md px-4 py-2 font-body text-sm border border-border;
+    @apply hover:bg-muted transition-all duration-300;
+  }
+
+  .card-dark {
+    @apply bg-card border border-border rounded-lg p-6;
+    transition: border-color 0.3s ease;
+  }
+
+  .card-dark:hover {
+    border-color: hsl(0 0% 20%);
+  }
+
+  .divider-line {
+    @apply w-full h-px bg-border;
+  }
+
+  .tag-sent {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-medium tracking-wide;
+    @apply bg-destructive/10 text-destructive;
+  }
+
+  .tag-received {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-medium tracking-wide;
+    @apply bg-success/10 text-success;
+  }
 }
 
-/* Base custom scrollbar optimized for both themes */
-::-webkit-scrollbar {
-  width: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: hsl(var(--background));
-}
-
-::-webkit-scrollbar-thumb {
-  background: hsl(var(--primary) / 0.5);
-  border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--primary));
-  box-shadow: 0 0 10px hsl(var(--primary));
-}
-
-/* Custom Neon Utils */
-.glow-primary {
-  box-shadow: 0 0 15px -3px hsl(var(--primary) / 0.5), 0 0 6px -2px hsl(var(--primary) / 0.3);
-}
-
-.glow-secondary {
-  box-shadow: 0 0 15px -3px hsl(var(--secondary) / 0.5), 0 0 6px -2px hsl(var(--secondary) / 0.3);
-}
-
-.text-glow {
-  text-shadow: 0 0 10px hsl(var(--primary) / 0.8);
-}
-
-.glass-panel {
-  @apply bg-card/60 backdrop-blur-2xl border border-white/5 shadow-2xl;
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
 }
