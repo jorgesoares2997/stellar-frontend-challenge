@@ -1,5 +1,20 @@
 'use client';
 
+/**
+ * WalletConnection
+ *
+ * Handles Freighter wallet connection using @creit.tech/stellar-wallets-kit.
+ *
+ * Connect flow:
+ *  1. stellar.connectWallet() → opens wallet modal (Freighter, xBull, Albedo, Lobstr)
+ *  2. Internally calls kit.getAddress() to retrieve the wallet's public key
+ *  3. Stores and exposes the address; propagates it to the parent via onConnect()
+ *
+ * Disconnect flow:
+ *  1. stellar.disconnect() → clears the stored public key from the StellarHelper instance
+ *  2. Resets local state and notifies the parent via onDisconnect()
+ */
+
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Copy, Check, ExternalLink, LogOut, ArrowRight } from 'lucide-react';
@@ -14,27 +29,44 @@ export default function WalletConnection({ onConnect, onDisconnect }: WalletConn
   const [publicKey, setPublicKey] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
+  /**
+   * Connect wallet:
+   * - Opens the Stellar Wallets Kit modal (Freighter is the default selectedWalletId)
+   * - Calls kit.getAddress() to retrieve the user's public key
+   * - Stores the address and propagates it to the parent component
+   */
   const handleConnect = async () => {
     try {
       setLoading(true);
-      const key = await stellar.connectWallet();
-      setPublicKey(key);
+      setError('');
+
+      // Opens wallet selection modal and retrieves address via kit.getAddress()
+      const address = await stellar.connectWallet();
+
+      setPublicKey(address);
       setIsConnected(true);
-      onConnect(key);
-    } catch (error: any) {
-      console.error('Connection error:', error);
-      // Removed alert to keep it minimal as per the reimagined UI's vibe
+      onConnect(address);
+    } catch (err: any) {
+      console.error('Wallet connection failed:', err);
+      setError(err.message ?? 'Failed to connect wallet');
     } finally {
       setLoading(false);
     }
   };
 
+  /**
+   * Disconnect wallet:
+   * - Calls stellar.disconnect() which clears the publicKey from StellarHelper
+   * - Resets local state
+   */
   const handleDisconnect = () => {
     stellar.disconnect();
     setPublicKey('');
     setIsConnected(false);
+    setError('');
     onDisconnect();
   };
 
@@ -78,6 +110,10 @@ export default function WalletConnection({ onConnect, onDisconnect }: WalletConn
             </>
           )}
         </button>
+
+        {error && (
+          <p className="mt-4 text-xs text-destructive font-mono">{error}</p>
+        )}
 
         <div className="mt-12 flex items-center justify-center gap-6">
           {['Freighter', 'xBull', 'Albedo', 'Lobstr'].map((w) => (

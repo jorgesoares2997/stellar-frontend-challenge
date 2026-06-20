@@ -5,7 +5,8 @@ import { motion, AnimatePresence, useScroll, useTransform, useInView } from 'fra
 import { ArrowDown } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
-// Dynamic imports to prevent SSR issues with wallet-kit and heavy components
+// All components use ssr: false because stellar-wallets-kit accesses window at module init time
+// WalletConnection wraps stellar.connectWallet() → kit.getAddress() and stellar.disconnect()
 const WalletConnection = dynamic(() => import('@/components/WalletConnection'), { ssr: false });
 const BalanceDisplay = dynamic(() => import('@/components/BalanceDisplay'), { ssr: false });
 const PaymentForm = dynamic(() => import('@/components/PaymentForm'), { ssr: false });
@@ -108,16 +109,31 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleConnect = (key: string) => {
-    setPublicKey(key);
+  /**
+   * Called by WalletConnection after stellar.connectWallet() resolves.
+   * stellar.connectWallet() internally calls kit.getAddress() to retrieve
+   * the Freighter/xBull/Albedo wallet's public key on Stellar Testnet.
+   */
+  const handleConnect = (address: string) => {
+    setPublicKey(address);
     setIsConnected(true);
   };
 
+  /**
+   * Disconnects the wallet by calling stellar.disconnect(), which clears
+   * the stored public key from the StellarHelper instance.
+   */
   const handleDisconnect = () => {
+    stellar.disconnect();
     setPublicKey('');
     setIsConnected(false);
   };
 
+  /**
+   * Triggered after a successful XLM payment via stellar.sendPayment().
+   * stellar.sendPayment() builds the transaction and signs it with
+   * kit.signTransaction() before submitting to Stellar Testnet.
+   */
   const handlePaymentSuccess = () => setRefreshKey((k) => k + 1);
 
   return (
